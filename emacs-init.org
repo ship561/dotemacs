@@ -1,0 +1,613 @@
+#+startup: content
+* Core packages
+** Package manager
+#+begin_src emacs-lisp
+  (defvar my-packages
+    '(better-defaults paredit idle-highlight-mode ido-ubiquitous
+                      find-file-in-project magit smex scpaste cider
+                      clojure-mode solarized-theme
+                      clojure-mode-extra-font-locking
+                      highlight-parentheses pretty-mode
+                      smartparens ess clj-refactor company yasnippet helm
+                      auctex htmlize))
+
+  (package-initialize)
+
+  (when (not package-archive-contents)
+    (package-refresh-contents))
+
+  (dolist (p my-packages)
+    (when (not (package-installed-p p))
+      (package-install p)))
+#+end_src
+
+** Core packages
+#+begin_src emacs-lisp
+  (require 'clojure-mode)
+  (require 'clojure-mode-extra-font-locking)
+  (require 'cider)
+  (require 'ess-site)
+  (require 'tex)
+  (require 'htmlize)
+  (require 'company)
+  (require 'clj-refactor)
+  (require 'yasnippet)
+  (require 'helm)
+  (require 'helm-config)
+  (require 'ob-clojure)
+
+#+end_src
+* Aesthetics
+** System- or user-specific customization
+   #+begin_src emacs-lisp
+   (cond
+    ((string-equal system-type "windows-nt") ; Microsoft Windows
+     (add-to-list 'default-frame-alist '(font . "Consolas-11"))
+     (load-theme 'solarized-light t))
+    ((string-equal system-type "darwin")   ; Mac OS X
+     (define-key cider-repl-mode-map (kbd "C-S-<up>") 'cider-repl-backward-input)
+     (define-key cider-repl-mode-map (kbd "C-S-<down>") 'cider-repl-forward-input)
+     (setq mouse-wheel-scroll-amount '(0.01));smoother scroll
+     (add-to-list 'default-frame-alist '(font . "monaco-10"))
+     (load-theme 'solarized-light t))
+    ((string-equal system-type "gnu/linux") ; linux
+     (load-theme 'solarized-dark t)
+     ))
+   #+end_src
+
+** Menu aesthetics
+   #+begin_src emacs-lisp
+   (defalias 'auto-tail-revert-mode 'tail-mode)
+   (if (fboundp 'menu-bar-mode) (menu-bar-mode 1))
+   (if (fboundp 'tool-bar-mode) (tool-bar-mode 1))
+
+   #+end_src
+* Backup
+#+BEGIN_SRC emacs-lisp
+(setq make-backup-files t               ; backup of a file the first time it is saved.
+      backup-by-copying t               ; don't clobber symlinks
+      version-control t                 ; version numbers for backup files
+      delete-old-versions t             ; delete excess backup files silently
+      delete-by-moving-to-trash t
+      kept-old-versions 6               ; oldest versions to keep when a new numbered backup is made (default: 2)
+      kept-new-versions 9               ; newest versions to keep when a new numbered backup is made (default: 2)
+      auto-save-default t               ; auto-save every buffer that visits a file
+      )
+
+#+END_SRC
+
+* Helm
+#+begin_src emacs-lisp
+(defun helm-toggle-header-line ()
+  (if (= (length helm-sources) 1)
+      (set-face-attribute 'helm-source-header nil :height 0.1)
+    (set-face-attribute 'helm-source-header nil :height 1.0)))
+
+(add-hook 'helm-before-initialize-hook 'helm-toggle-header-line)
+(helm-autoresize-mode 1)
+(setq helm-autoresize-max-height 30)
+(setq helm-autoresize-min-height 30)
+(setq helm-split-window-in-side-p t)
+
+(global-set-key (kbd "M-x") 'helm-M-x)
+(setq helm-M-x-fuzzy-match t) ;; optional fuzzy matching for helm-M-x
+
+(global-set-key (kbd "C-x b") 'helm-mini)
+(setq helm-buffers-fuzzy-matching t
+      helm-recentf-fuzzy-match    t)
+
+(setq helm-split-window-in-side-p           t ; open helm buffer inside current window, not occupy whole other window
+      helm-move-to-line-cycle-in-source     t ; move to end or beginning of source when reaching top or bottom of source.
+      helm-ff-search-library-in-sexp        t ; search for library in `require' and `declare-function' sexp.
+      helm-scroll-amount                    8 ; scroll 8 lines other window using M-<next>/M-<prior>
+      helm-ff-file-name-history-use-recentf t)
+
+(helm-mode 1)
+#+end_src
+
+** helm smex
+#+begin_src emacs-lisp
+
+(defun helm-smex-items ()
+  (smex-rebuild-cache)
+  (smex-convert-for-ido smex-cache))
+
+(defun helm-smex-execute-command (command)
+  (let ((prefix-arg current-prefix-arg))
+    (command-execute command 'record)
+    (smex-rank command)))
+
+(setq helm-smex-source
+  '((name . "M-x")
+    (candidates . helm-smex-items)
+    (coerce . intern)
+    (action ("smex" . (helm-smex-execute-command)))))
+
+(defun helm-smex ()
+  (interactive)
+  (helm :sources 'helm-smex-source :buffer "*helm-smex*"))
+
+#+end_src
+
+* General settings
+** starter-kit-misc
+#+begin_src emacs-lisp
+  (when window-system
+    (setq frame-title-format '(buffer-file-name "%f" ("%b")))
+    (tooltip-mode -1)
+    (mouse-wheel-mode t)
+    (blink-cursor-mode -1))
+
+  (setq inhibit-startup-message t)
+#+end_src
+** starter-kit-defuns
+   #+begin_src emacs-lisp
+   (defun esk-local-column-number-mode ()
+     (make-local-variable 'column-number-mode)
+     (column-number-mode t))
+
+   (defun esk-local-comment-auto-fill ()
+     (set (make-local-variable 'comment-auto-fill-only-comments) t)
+     (auto-fill-mode t))
+
+   (defun esk-turn-on-hl-line-mode ()
+     (when (> (display-color-cells) 8)
+       (hl-line-mode t)))
+
+   (defun esk-pretty-lambdas ()
+     (font-lock-add-keywords
+      nil `(("(?\\(lambda\\>\\)"
+             (0 (progn (compose-region (match-beginning 1) (match-end 1)
+                                       ,(make-char 'greek-iso8859-7 107))
+                       nil))))))
+
+   (defun esk-add-watchwords ()
+     (font-lock-add-keywords
+      nil '(("\\<\\(FIX\\(ME\\)?\\|TODO\\|HACK\\|REFACTOR\\|NOCOMMIT\\)"
+             1 font-lock-warning-face t))))
+
+   (add-hook 'prog-mode-hook 'esk-local-column-number-mode)
+   ;;(add-hook 'prog-mode-hook 'esk-local-comment-auto-fill)
+   ;;(add-hook 'prog-mode-hook 'esk-turn-on-hl-line-mode)
+   (add-hook 'prog-mode-hook 'esk-pretty-lambdas)
+   (add-hook 'prog-mode-hook 'esk-add-watchwords)
+   ;;(add-hook 'prog-mode-hook 'idle-highlight-mode)
+
+   (defun esk-untabify-buffer ()
+     (interactive)
+     (untabify (point-min) (point-max)))
+
+   (defun esk-indent-buffer ()
+     (interactive)
+     (indent-region (point-min) (point-max)))
+
+   (defun esk-cleanup-buffer ()
+     "Perform a bunch of operations on the whitespace content of a buffer."
+     (interactive)
+     (esk-indent-buffer)
+     (esk-untabify-buffer)
+     (delete-trailing-whitespace))
+
+   #+end_src
+** starter-kit-lisp
+#+begin_src emacs-lisp
+(define-key emacs-lisp-mode-map (kbd "C-c v") 'eval-buffer)
+(define-key lisp-mode-shared-map (kbd "RET") 'reindent-then-newline-and-indent)
+
+(defface esk-paren-face
+   '((((class color) (background dark))
+      (:foreground "grey50"))
+     (((class color) (background light))
+      (:foreground "grey55")))
+   "Face used to dim parentheses."
+   :group 'starter-kit-faces)
+
+(font-lock-add-keywords 'emacs-lisp-mode
+                        '(("(\\|)" . 'esk-paren-face)))
+#+end_src
+** UTF-8
+#+begin_src emacs-lisp
+(prefer-coding-system 'utf-8)
+(when (display-graphic-p)
+  (setq x-select-request-type '(UTF8_STRING COMPOUND_TEXT TEXT STRING)))
+
+#+end_src
+
+** Flyspell
+#+begin_src emacs-lisp
+(dolist (hook '(text-mode-hook))
+      (add-hook hook (lambda () (flyspell-mode 1))))
+    (dolist (hook '(change-log-mode-hook log-edit-mode-hook))
+      (add-hook hook (lambda () (flyspell-mode -1))))
+#+end_src
+
+** Windmove
+#+begin_src emacs-lisp
+(windmove-default-keybindings)
+
+(add-hook 'org-shiftup-final-hook 'windmove-up)
+(add-hook 'org-shiftleft-final-hook 'windmove-left)
+(add-hook 'org-shiftdown-final-hook 'windmove-down)
+(add-hook 'org-shiftright-final-hook 'windmove-right)
+#+end_src
+
+
+* Custom functions/keybinds
+** Custom functions
+#+begin_src emacs-lisp
+(defun unfill-paragraph ()
+  (interactive)
+  (let ((fill-column (point-max)))
+    (fill-paragraph nil)))
+
+(defun unfill-region ()
+  (interactive)
+  (let ((fill-column (point-max)))
+    (fill-region (region-beginning) (region-end) nil)))
+
+(defun my/fill-or-unfill-paragraph (&optional unfill region)
+  "Fill paragraph (or REGION).
+  With the prefix argument UNFILL, unfill it instead."
+  (interactive (progn
+                 (barf-if-buffer-read-only)
+                 (list (if current-prefix-arg 'unfill) t)))
+  (let ((fill-column (if unfill (point-max) fill-column)))
+    (fill-paragraph nil region)))
+
+(defun kill-to-beginning-of-line ()
+  "Delete from current point to beginning of line"
+  (interactive)
+  (save-excursion
+    (let ( (beg (point)) )
+      (beginning-of-line)
+      (delete-region beg (point)))))
+
+(defun flyspell-check-next-highlighted-word ()
+  "Custom function to spell check next highlighted word"
+  (interactive)
+  (flyspell-goto-next-error)
+  (ispell-word)
+  )
+
+(defun org-mode-reftex-setup ()
+  (load-library "reftex")
+  (and (buffer-file-name) (file-exists-p (buffer-file-name))
+       (progn
+         ;enable auto-revert-mode to update reftex when bibtex file changes on disk
+         (auto-revert-mode t)
+         (reftex-parse-all)
+         ;add a custom reftex cite format to insert links
+         (reftex-set-cite-format
+          '((?b . "[[bib:%l][%l-bib]]")
+            (?n . "*** [[notes:%l][notes-%l]]")
+            (?p . "** [[papers:%j/%A_%y_%t][%l]]: %t\n")
+            (?t . "%t")
+            (?h . "** %t\n:PROPERTIES:\n:Custom_ID: %l\n:END:\n[[papers:%l][%l-paper]]")))))
+  (define-key org-mode-map (kbd "C-c )") 'reftex-citation)
+  (define-key org-mode-map (kbd "C-c (") 'org-mode-reftex-search))
+
+(defun org-mode-reftex-search ()
+  ;;jump to the notes for the paper pointed to at from reftex search
+  (interactive)
+  (org-open-link-from-string (format "[[notes:%s]]" (first (reftex-citation t)))))
+
+(defun org-insert-src-block (src-code-type)
+  "Insert a `SRC-CODE-TYPE' type source code block in org-mode."
+  (interactive
+   (let ((src-code-types
+          '("emacs-lisp" "python" "C" "sh" "java" "js" "clojure" "C++" "css"
+            "calc" "asymptote" "dot" "gnuplot" "ledger" "lilypond" "mscgen"
+            "octave" "oz" "plantuml" "R" "sass" "screen" "sql" "awk" "ditaa"
+            "haskell" "latex" "lisp" "matlab" "ocaml" "org" "perl" "ruby"
+            "scheme" "sqlite")))
+     (list (ido-completing-read "Source code type: " src-code-types))))
+  (progn
+    (newline-and-indent)
+    (insert (format "#+BEGIN_SRC %s\n" src-code-type))
+    (newline-and-indent)
+    (insert "#+END_SRC\n")
+    (previous-line 2)
+    (org-edit-src-code)))
+#+end_src
+
+** Custom keybinds
+#+begin_src emacs-lisp
+(global-set-key (kbd "M-Q") 'unfill-paragraph)
+(global-set-key [?\C-u] 'kill-to-beginning-of-line)
+(global-set-key  (kbd "M-q") 'my/fill-or-unfill-paragraph)
+
+;;paste key binding redefine
+(global-set-key (kbd "C-v") 'yank)
+(global-set-key "\C-f" 'forward-sexp)
+(global-set-key "\C-b" 'backward-sexp)
+(global-set-key (kbd "C-;") 'comment-or-uncomment-region)
+
+;; Unbind Pesky Sleep Button
+(global-unset-key [(control z)])
+(global-unset-key [(control x)(control z)])
+
+;;imenu to call up function names
+(global-set-key [mouse-8] 'imenu)
+
+;; easy spell check
+(global-set-key (kbd "<f8>") 'ispell-word)
+(global-set-key (kbd "C-S-<f8>") 'flyspell-mode)
+(global-set-key (kbd "C-M-<f8>") 'flyspell-buffer)
+(global-set-key (kbd "C-<f8>") 'flyspell-check-previous-highlighted-word)
+(global-set-key (kbd "M-<f8>") 'flyspell-check-next-highlighted-word)
+
+;;pomodoro
+(global-set-key (kbd "<f12>") 'tomatinho)
+#+end_src
+
+* Programming
+** Clojure
+#+begin_src emacs-lisp
+(setq cider-repl-use-clojure-font-lock t)
+(setq cider-show-error-buffer 'except-in-repl) ; or
+(add-hook 'cider-mode-hook 'cider-turn-on-eldoc-mode)
+(setq cider-repl-display-in-current-window t)
+(setq cider-prefer-local-resources t)
+(setq cider-repl-wrap-history t)
+(setq cider-repl-history-size 1000) ; the default is 500
+(setq cider-repl-history-file "~/.lein-repl-history")
+
+(add-hook 'clojure-mode-hook (lambda ()
+                               (clj-refactor-mode 1)
+                               ;; insert keybinding setup here
+                               ))
+
+(font-lock-add-keywords 'clojure-mode
+                        '(("(\\|)" . 'esk-paren-face)))
+
+;;pretify symbols
+(eval-after-load 'clojure-mode
+  '(font-lock-add-keywords
+    'clojure-mode
+    (mapcar
+     (lambda (pair)
+       `(,(car pair)
+         (0 (progn (compose-region
+                    (match-beginning 0) (match-end 0)
+                    ,(cadr pair))
+                   nil))))
+     '(("\\<fn\\>" ?ƒ)
+       ("\\<comp\\>" ?∘)
+       ("\\<partial\\>" ?þ)
+       ("\\<complement\\>" ?¬)))))
+#+end_src
+
+** Company
+#+begin_src emacs-lisp
+(add-hook 'after-init-hook 'global-company-mode)
+
+(setq company-idle-delay 0.2)
+(setq company-tooltip-limit 10)
+(setq company-minimum-prefix-length 3)
+(setq company-echo-delay 0)
+
+#+end_src
+
+** Highlight parens
+#+begin_src emacs-lisp
+(require 'highlight-parentheses)
+(add-hook 'clojure-mode-hook 'highlight-parentheses-mode)
+(add-hook 'cider-repl-mode-hook 'highlight-parentheses-mode)
+
+#+end_src
+
+** Parentheses management
+*** smartparens
+#+begin_src emacs-lisp
+(require 'smartparens-config)
+(add-hook 'cider-repl-mode-hook 'smartparens-mode)
+
+(dolist (mode '(scheme emacs-lisp lisp clojure clojurescript))
+  (add-hook (intern (concat (symbol-name mode) "-mode-hook"))
+            'smartparens-mode))
+
+(define-key sp-keymap (kbd "M-<up>") 'sp-splice-sexp-killing-backward)
+(sp-pair "(" ")" :wrap "M-(")
+(define-key sp-keymap (kbd "C-k") 'sp-kill-sexp)
+(define-key sp-keymap (kbd "M-d") 'sp-kill-word)
+(define-key sp-keymap (kbd "M-RET") 'sp-newline)
+(define-key sp-keymap (kbd "C-<right>") 'sp-forward-slurp-sexp)
+(define-key sp-keymap (kbd "C-<left>") 'sp-forward-barf-sexp)
+#+end_src
+
+*** Paredit
+#+begin_src emacs-lisp :tangle no
+;; TODO: look into parenface package
+(defface esk-paren-face
+  '((((class color) (background dark))
+     (:foreground "grey50"))
+    (((class color) (background light))
+     (:foreground "grey55")))
+  "Face used to dim parentheses."
+  :group 'starter-kit-faces)
+
+(eval-after-load 'paredit
+  ;; need a binding that works in the terminal
+  '(progn
+     (define-key paredit-mode-map (kbd "M-)") 'paredit-forward-slurp-sexp)
+     (define-key paredit-mode-map (kbd "M-(") 'paredit-backward-slurp-sexp)))
+
+(dolist (mode '(scheme emacs-lisp lisp clojure clojurescript))
+  (when (> (display-color-cells) 8)
+    (font-lock-add-keywords (intern (concat (symbol-name mode) "-mode"))
+                            '(("(\\|)" . 'esk-paren-face))))
+  (add-hook (intern (concat (symbol-name mode) "-mode-hook"))
+            'paredit-mode))
+
+#+end_src
+
+* Text editor
+** Org mode
+#+begin_src emacs-lisp
+(setq org-directory "~/org/")
+(setq org-default-notes-file (concat org-directory "/notes.org"))
+(define-key global-map "\C-cr" 'org-capture)
+
+(setq org-use-sub-superscripts "{}")
+
+(custom-set-variables
+ '(ess-swv-pdflatex-commands (quote ("pdflatex" "texi2pdf" "make")))
+ '(ess-swv-plug-into-AUCTeX-p t)
+ '(ess-swv-processor (quote knitr))
+ '(org-agenda-files (quote ("~/org/tasks.org")))
+ '(org-default-notes-file "~/org/notes.org")
+ '(org-agenda-ndays 7)
+ '(org-deadline-warning-days 14)
+ '(org-agenda-show-all-dates t)
+ '(org-agenda-skip-deadline-if-done t)
+ '(org-agenda-skip-scheduled-if-done t)
+ '(org-agenda-start-on-weekday nil)
+ '(org-reverse-note-order t)
+ '(org-fast-tag-selection-single-key (quote expert))
+ '(org-agenda-custom-commands
+   (quote (("d" todo "DELEGATED" nil)
+           ("c" todo "DONE|DEFERRED|CANCELLED" nil)
+           ("w" todo "WAITING" nil)
+           ("W" agenda "" ((org-agenda-ndays 21)))
+           ("A" agenda ""
+            ((org-agenda-skip-function
+              (lambda nil
+                (org-agenda-skip-entry-if (quote notregexp) "\\=.*\\[#A\\]")))
+             (org-agenda-ndays 1)
+             (org-agenda-overriding-header "Today's Priority #A tasks: ")))
+           ("u" alltodo ""
+            ((org-agenda-skip-function
+              (lambda nil
+                (org-agenda-skip-entry-if (quote scheduled) (quote deadline)
+                                          (quote regexp) "\n]+>")))
+             (org-agenda-overriding-header "Unscheduled TODO entries: ")))))))
+
+(defun capture-bib (path)
+  (let ((name (read-string "Name: ")))
+    (expand-file-name (format "%s.bib" name) path)))
+
+(setq org-capture-templates
+      '(("t" "Todo" entry (file+headline "~/org/tasks.org" "Tasks")
+         "** TODO %^{Brief Description} %?\n %u" )
+        ("i" "Ideas" entry (file "~/org/ideas.org") "** %^{Title} %U\n%?\n"  )
+        ("b" "Bibtex citation" plain (file (capture-bib "~/research/refs/")))
+        ("B" "Bibtex citation to all" plain (file "~/research/all.bib"))))
+
+(setq org-todo-keyword-faces
+      '(
+        ("TODO" . (:foreground "#ff4500" :weight bold))
+        ("IN-PROGRESS" . (:foreground "yellow" :weight bold))
+        ("WAITING" . (:foreground "purple" :weight bold))
+        ("DONE" . (:foreground "light steel blue" :weight bold))
+        ("READ" . (:foreground "light steel blue" :weight bold))
+        ("NEED-NOTES" . (:foreground "yellow" :weight bold))))
+
+(setq org-todo-keywords
+      '((sequence "TODO" "IN-PROGRESS" "WAITING" "DONE")))
+
+(setq org-tag-alist
+      '(("reading" . ?r) ("coding" . ?c) ("analysis" . ?a) ("misc" . ?m)))
+
+(add-hook 'org-mode-hook '(lambda ()
+                            ;; C-TAB for expanding
+                            (local-set-key (kbd "C-<tab>")
+                                           'yas/expand-from-trigger-key)
+                            ;; keybinding for editing source code blocks
+                            (local-set-key (kbd "C-c s e")
+                                           'org-edit-src-code)
+                            ;; keybinding for inserting code blocks
+                            (local-set-key (kbd "C-c s i")
+                                           'org-insert-src-block)
+                            ))
+
+(add-hook 'org-mode-hook 'org-mode-reftex-setup)
+
+(setq org-link-abbrev-alist
+      '(("bib" . "~/research/all.bib::%s")
+        ("notes" . "~/org/paper-notes.org::#%s")
+        ("papers" . "~/Dropbox/papers/%s.pdf")))
+#+end_src
+
+** Literate programming
+#+begin_src emacs-lisp
+(setq org-babel-clojure-backend 'cider)
+(setq org-src-fontify-natively t)
+
+; We only need Emacs-Lisp and Clojure in this tutorial:
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((emacs-lisp . t)
+   (clojure . t)
+   (R . t)))
+
+;; Let's have pretty source code blocks
+(setq org-edit-src-content-indentation 0
+      org-src-tab-acts-natively t
+      org-src-fontify-natively t
+      org-confirm-babel-evaluate nil)
+#+end_src
+
+** Latex
+#+begin_src emacs-lisp
+(TeX-global-PDF-mode t)
+(setq reftex-plug-into-AUCTeX t)
+
+#+end_src
+* Yasnippet
+#+begin_src emacs-lisp
+(add-to-list 'yas-snippet-dirs "~/.emacs.d/snippets")
+(add-hook 'LaTeX-mode-hook 'yas-minor-mode-on)
+(add-hook 'org-mode-hook 'yas-minor-mode-on)
+(yas-reload-all)
+
+(add-hook 'org-mode-hook
+          (lambda ()
+            (org-set-local 'yas/trigger-key [tab])
+            (define-key yas/keymap [tab] 'yas/next-field-or-maybe-expand)))
+#+end_src
+
+* Random stuff
+** Games
+#+begin_src emacs-lisp
+(autoload 'typing-of-emacs "typing" "The Typing Of Emacs, a game." t)
+#+end_src
+** ralee
+#+begin_src emacs-lisp
+
+;;ralee mode settings
+(add-to-list 'load-path (concat dotfiles-dir "ralee-0.61/elisp"))
+(autoload 'ralee-mode "ralee-mode" "Yay! RNA things" t)
+(setq auto-mode-alist (cons '("\\.sto$" . ralee-mode) auto-mode-alist))
+
+#+end_src
+* Unused
+** Smex
+#+begin_src emacs-lisp
+(setq smex-save-file (concat user-emacs-directory ".smex-items"))
+(smex-initialize)
+;(global-set-key (kbd "M-x") 'smex)
+
+#+end_src
+
+** Pretty mode
+#+begin_src emacs-lisp :tangle no
+(require 'pretty-mode)
+; if you want to set it globally
+(global-pretty-mode t)
+
+#+end_src
+** undo-tree
+#+begin_src emacs-lisp :tangle no
+(require 'undo-tree)
+(global-undo-tree-mode)
+
+#+end_src
+** Color theme
+Unused as the theme is installed via ELPA. It is already on the path
+#+begin_src emacs-lisp :tangle no
+  (add-to-list 'custom-theme-load-path
+               (concat package-user-dir "/solarized-theme-1.2.1"))
+
+#+end_src
+
+

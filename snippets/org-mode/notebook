@@ -1,0 +1,14 @@
+# -*- mode: snippet; require-final-newline: nil -*-
+# name: notebook-header
+# key: notebook
+# --
+#+OPTIONS: H:2 num:2
+#+PROPERTY: header-args:clojure :session foo :tangle ${1:file} :eval no-export
+#+HTML_HEAD: <style type="text/css">body{ width:960px; margin-left:auto; margin-right:auto; text-align:left}</style>
+#+latex_header: \usepackage[margin=1in]{geometry}
+
+* Purpose
+
+* Why
+
+* Keywords
