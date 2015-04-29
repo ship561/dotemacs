@@ -393,6 +393,9 @@
 (require 'highlight-parentheses)
 (add-hook 'clojure-mode-hook 'highlight-parentheses-mode)
 (add-hook 'cider-repl-mode-hook 'highlight-parentheses-mode)
+(setq hl-paren-colors '("firebrick1" "blue violet" "steel blue" "green"))
+(set-face-attribute 'show-paren-match-face nil :weight 'extra-bold
+                    :background "aquamarine")
 
 #+end_src
 
