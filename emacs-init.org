@@ -2,23 +2,23 @@
 * Core packages
 ** Package manager
 #+begin_src emacs-lisp
-  (defvar my-packages
-    '(better-defaults paredit idle-highlight-mode ido-ubiquitous
-                      find-file-in-project magit smex scpaste cider
-                      clojure-mode solarized-theme
-                      clojure-mode-extra-font-locking
-                      highlight-parentheses pretty-mode
-                      smartparens ess clj-refactor company yasnippet helm
-                      auctex htmlize))
+(defvar my-packages
+  '(better-defaults paredit idle-highlight-mode ido-ubiquitous
+                    find-file-in-project magit scpaste cider
+                    clojure-mode solarized-theme auto-indent-mode
+                    clojure-mode-extra-font-locking
+                    highlight-parentheses
+                    smartparens ess clj-refactor company yasnippet helm
+                    auctex htmlize))
 
-  (package-initialize)
+(package-initialize)
 
-  (when (not package-archive-contents)
-    (package-refresh-contents))
+(when (not package-archive-contents)
+  (package-refresh-contents))
 
-  (dolist (p my-packages)
-    (when (not (package-installed-p p))
-      (package-install p)))
+(dolist (p my-packages)
+  (when (not (package-installed-p p))
+    (package-install p)))
 #+end_src
 
 ** Core packages
@@ -45,6 +45,13 @@
      (add-to-list 'default-frame-alist '(font . "Consolas-11"))
      (load-theme 'solarized-light t))
     ((string-equal system-type "darwin")   ; Mac OS X
+     (when (not (package-installed-p '(redo mac-key-mode)))
+       (package-install p))
+     
+     (require 'redo)
+     (require 'mac-key-mode)
+     (mac-key-mode 1)
+
      (define-key cider-repl-mode-map (kbd "C-S-<up>") 'cider-repl-backward-input)
      (define-key cider-repl-mode-map (kbd "C-S-<down>") 'cider-repl-forward-input)
      (setq mouse-wheel-scroll-amount '(0.01));smoother scroll
@@ -231,6 +238,32 @@
 (add-hook 'org-shiftright-final-hook 'windmove-right)
 #+end_src
 
+** Autoindent
+#+begin_src emacs-lisp
+(auto-indent-global-mode)
+(setq auto-indent-indent-style 'conservative)
+
+(defun kicker-ess-fix-code (beg end)
+    "Fixes ess path"
+    (save-restriction
+      (save-excursion
+        (save-match-data
+          (narrow-to-region beg end)
+          (goto-char (point-min))
+          (while (re-search-forward "^[ \t]*[>][ \t]+" nil t)
+            (replace-match "")
+            (goto-char (point-at-eol))
+            (while (looking-at "[ \t\n]*[+][ \t]+")
+              (replace-match "\n")
+              (goto-char (point-at-eol))))))))
+  
+  (defun kicker-ess-turn-on-fix-code ()
+    (interactive)
+    (when (string= "S" ess-language)
+      (add-hook 'auto-indent-after-yank-hook 'kicker-ess-fix-code t t)))
+(add-hook 'ess-mode-hook 'kicker-ess-turn-on-fix-code)
+
+#+end_src
 
 * Custom functions/keybinds
 ** Custom functions
@@ -321,6 +354,7 @@
 (global-set-key "\C-f" 'forward-sexp)
 (global-set-key "\C-b" 'backward-sexp)
 (global-set-key (kbd "C-;") 'comment-or-uncomment-region)
+(global-set-key "\C-cy" 'helm-show-kill-ring)
 
 ;; Unbind Pesky Sleep Button
 (global-unset-key [(control z)])
@@ -337,7 +371,8 @@
 (global-set-key (kbd "M-<f8>") 'flyspell-check-next-highlighted-word)
 
 ;;pomodoro
-(global-set-key (kbd "<f12>") 'tomatinho)
+(global-set-key (kbd "<f12>") 'pomodoro-start)
+(global-set-key (kbd "S-<f12>") 'pomodoro-stop)
 #+end_src
 
 * Programming
@@ -379,7 +414,8 @@
 
 ** Company
 #+begin_src emacs-lisp
-(add-hook 'after-init-hook 'global-company-mode)
+(add-hook 'prog-mode-hook #'company-mode)
+(add-hook 'cider-repl-mode-hook #'company-mode)
 
 (setq company-idle-delay 0.2)
 (setq company-tooltip-limit 10)
@@ -583,9 +619,19 @@
 (setq auto-mode-alist (cons '("\\.sto$" . ralee-mode) auto-mode-alist))
 
 #+end_src
+** pomodoro
+#+begin_src emacs-lisp
+(add-to-list 'load-path (concat dotfiles-dir "pomodoro.el/"))
+(require 'pomodoro)
+(pomodoro-add-to-mode-line)
+#+end_src
+
 * Unused
 ** Smex
 #+begin_src emacs-lisp
+(unless (package-installed-p 'smex)
+  (package-install 'smex))
+
 (setq smex-save-file (concat user-emacs-directory ".smex-items"))
 (smex-initialize)
 ;(global-set-key (kbd "M-x") 'smex)
@@ -594,6 +640,9 @@
 
 ** Pretty mode
 #+begin_src emacs-lisp :tangle no
+(unless (package-installed-p 'pretty-mode)
+  (package-install 'pretty-mode))
+
 (require 'pretty-mode)
 ; if you want to set it globally
 (global-pretty-mode t)
